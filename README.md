@@ -1,7 +1,10 @@
 # kirbi2hashcat
 
-1. The repo explains the "ASN.1" codec of the Kerberos protocol
-2. The script decode binary Kerberos TGS tickets (.kirbi, KRB-CRED) to hashcat recognizable format. A kerberoasting toolkit for research purpose. Support etype 17, 18, 23
+1. The repo explains the "ASN.1" codec of the Kerberos protocol, with reference to the respective RFCs.
+2. The script decode binary Kerberos TGS tickets (.kirbi, KRB-CRED) to hashcat recognizable format.
+   - Bugfix
+   - Add detailed comments and references.
+   - Add support for etype 17 and 18
 
 ## Usage
 
