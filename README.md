@@ -46,3 +46,9 @@ python3 kirbi2hashcat.py example/MSSQLSvc-sql01.medin.local.kirbi
   - `1` : the "Form" is "constructed"
   - `10000`: 16; "universal", "constructed", "Sequence and Sequence-of types"; defined in [X.680, ITU-T (2021), p14, Table 1 - Universal class tag assignments](./ref/T-REC-X.680-202102-I!!PDF-E.pdf) (ref: [X.680, ITU-T](https://www.itu.int/rec/T-REC-X.680-202102-I/en))
 
+## Contributions
+
+- The code is based on [kirbi2hashcat, jarilaos](https://github.com/jarilaos/kirbi2hashcat/blob/master/kirbi2hashcat.py)
+- Which was based on the Kerberoast script from Tim Medin to extract the Kerberos tickets from a kirbi file (https://github.com/nidem/kerberoast).
+- And [kirbi2john.py](https://raw.githubusercontent.com/magnumripper/JohnTheRipper/bleeding-jumbo/run/kirbi2john.py)
+- Which was then modified by Laox to use with hashcat
