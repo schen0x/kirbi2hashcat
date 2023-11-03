@@ -1,0 +1,772 @@
+A.  ASN.1 module
+
+KerberosV5Spec2 {
+        iso(1) identified-organization(3) dod(6) internet(1)
+        security(5) kerberosV5(2) modules(4) krb5spec2(2)
+} DEFINITIONS EXPLICIT TAGS ::= BEGIN
+
+-- OID arc for KerberosV5
+--
+-- This OID may be used to identify Kerberos protocol messages
+-- encapsulated in other protocols.
+--
+-- This OID also designates the OID arc for KerberosV5-related OIDs.
+--
+-- NOTE: RFC 1510 had an incorrect value (5) for "dod" in its OID.
+id-krb5         OBJECT IDENTIFIER ::= {
+        iso(1) identified-organization(3) dod(6) internet(1)
+        security(5) kerberosV5(2)
+}
+
+Int32           ::= INTEGER (-2147483648..2147483647)
+                    -- signed values representable in 32 bits
+
+UInt32          ::= INTEGER (0..4294967295)
+                    -- unsigned 32 bit values
+
+Microseconds    ::= INTEGER (0..999999)
+                    -- microseconds
+
+KerberosString  ::= GeneralString (IA5String)
+
+Realm           ::= KerberosString
+
+PrincipalName   ::= SEQUENCE {
+        name-type       [0] Int32,
+        name-string     [1] SEQUENCE OF KerberosString
+}
+
+KerberosTime    ::= GeneralizedTime -- with no fractional seconds
+
+HostAddress     ::= SEQUENCE  {
+        addr-type       [0] Int32,
+        address         [1] OCTET STRING
+}
+
+-- NOTE: HostAddresses is always used as an OPTIONAL field and
+-- should not be empty.
+HostAddresses   -- NOTE: subtly different from rfc1510,
+
+
+
+Neuman, et al.              Standards Track                   [Page 123]
+
+
+RFC 4120                      Kerberos V5                      July 2005
+
+
+                -- but has a value mapping and encodes the same
+        ::= SEQUENCE OF HostAddress
+
+-- NOTE: AuthorizationData is always used as an OPTIONAL field and
+-- should not be empty.
+AuthorizationData       ::= SEQUENCE OF SEQUENCE {
+        ad-type         [0] Int32,
+        ad-data         [1] OCTET STRING
+}
+
+PA-DATA         ::= SEQUENCE {
+        -- NOTE: first tag is [1], not [0]
+        padata-type     [1] Int32,
+        padata-value    [2] OCTET STRING -- might be encoded AP-REQ
+}
+
+KerberosFlags   ::= BIT STRING (SIZE (32..MAX))
+                    -- minimum number of bits shall be sent,
+                    -- but no fewer than 32
+
+EncryptedData   ::= SEQUENCE {
+        etype   [0] Int32 -- EncryptionType --,
+        kvno    [1] UInt32 OPTIONAL,
+        cipher  [2] OCTET STRING -- ciphertext
+}
+
+EncryptionKey   ::= SEQUENCE {
+        keytype         [0] Int32 -- actually encryption type --,
+        keyvalue        [1] OCTET STRING
+}
+
+Checksum        ::= SEQUENCE {
+        cksumtype       [0] Int32,
+        checksum        [1] OCTET STRING
+}
+
+Ticket          ::= [APPLICATION 1] SEQUENCE {
+        tkt-vno         [0] INTEGER (5),
+        realm           [1] Realm,
+        sname           [2] PrincipalName,
+        enc-part        [3] EncryptedData -- EncTicketPart
+}
+
+-- Encrypted part of ticket
+EncTicketPart   ::= [APPLICATION 3] SEQUENCE {
+        flags                   [0] TicketFlags,
+        key                     [1] EncryptionKey,
+        crealm                  [2] Realm,
+
+
+
+Neuman, et al.              Standards Track                   [Page 124]
+
+
+RFC 4120                      Kerberos V5                      July 2005
+
+
+        cname                   [3] PrincipalName,
+        transited               [4] TransitedEncoding,
+        authtime                [5] KerberosTime,
+        starttime               [6] KerberosTime OPTIONAL,
+        endtime                 [7] KerberosTime,
+        renew-till              [8] KerberosTime OPTIONAL,
+        caddr                   [9] HostAddresses OPTIONAL,
+        authorization-data      [10] AuthorizationData OPTIONAL
+}
+
+-- encoded Transited field
+TransitedEncoding       ::= SEQUENCE {
+        tr-type         [0] Int32 -- must be registered --,
+        contents        [1] OCTET STRING
+}
+
+TicketFlags     ::= KerberosFlags
+        -- reserved(0),
+        -- forwardable(1),
+        -- forwarded(2),
+        -- proxiable(3),
+        -- proxy(4),
+        -- may-postdate(5),
+        -- postdated(6),
+        -- invalid(7),
+        -- renewable(8),
+        -- initial(9),
+        -- pre-authent(10),
+        -- hw-authent(11),
+-- the following are new since 1510
+        -- transited-policy-checked(12),
+        -- ok-as-delegate(13)
+
+AS-REQ          ::= [APPLICATION 10] KDC-REQ
+
+TGS-REQ         ::= [APPLICATION 12] KDC-REQ
+
+KDC-REQ         ::= SEQUENCE {
+        -- NOTE: first tag is [1], not [0]
+        pvno            [1] INTEGER (5) ,
+        msg-type        [2] INTEGER (10 -- AS -- | 12 -- TGS --),
+        padata          [3] SEQUENCE OF PA-DATA OPTIONAL
+                            -- NOTE: not empty --,
+        req-body        [4] KDC-REQ-BODY
+}
+
+KDC-REQ-BODY    ::= SEQUENCE {
+        kdc-options             [0] KDCOptions,
+
+
+
+Neuman, et al.              Standards Track                   [Page 125]
+
+
+RFC 4120                      Kerberos V5                      July 2005
+
+
+        cname                   [1] PrincipalName OPTIONAL
+                                    -- Used only in AS-REQ --,
+        realm                   [2] Realm
+                                    -- Server's realm
+                                    -- Also client's in AS-REQ --,
+        sname                   [3] PrincipalName OPTIONAL,
+        from                    [4] KerberosTime OPTIONAL,
+        till                    [5] KerberosTime,
+        rtime                   [6] KerberosTime OPTIONAL,
+        nonce                   [7] UInt32,
+        etype                   [8] SEQUENCE OF Int32 -- EncryptionType
+                                    -- in preference order --,
+        addresses               [9] HostAddresses OPTIONAL,
+        enc-authorization-data  [10] EncryptedData OPTIONAL
+                                    -- AuthorizationData --,
+        additional-tickets      [11] SEQUENCE OF Ticket OPTIONAL
+                                        -- NOTE: not empty
+}
+
+KDCOptions      ::= KerberosFlags
+        -- reserved(0),
+        -- forwardable(1),
+        -- forwarded(2),
+        -- proxiable(3),
+        -- proxy(4),
+        -- allow-postdate(5),
+        -- postdated(6),
+        -- unused7(7),
+        -- renewable(8),
+        -- unused9(9),
+        -- unused10(10),
+        -- opt-hardware-auth(11),
+        -- unused12(12),
+        -- unused13(13),
+-- 15 is reserved for canonicalize
+        -- unused15(15),
+-- 26 was unused in 1510
+        -- disable-transited-check(26),
+--
+        -- renewable-ok(27),
+        -- enc-tkt-in-skey(28),
+        -- renew(30),
+        -- validate(31)
+
+AS-REP          ::= [APPLICATION 11] KDC-REP
+
+TGS-REP         ::= [APPLICATION 13] KDC-REP
+
+
+
+
+Neuman, et al.              Standards Track                   [Page 126]
+
+
+RFC 4120                      Kerberos V5                      July 2005
+
+
+KDC-REP         ::= SEQUENCE {
+        pvno            [0] INTEGER (5),
+        msg-type        [1] INTEGER (11 -- AS -- | 13 -- TGS --),
+        padata          [2] SEQUENCE OF PA-DATA OPTIONAL
+                                -- NOTE: not empty --,
+        crealm          [3] Realm,
+        cname           [4] PrincipalName,
+        ticket          [5] Ticket,
+        enc-part        [6] EncryptedData
+                                -- EncASRepPart or EncTGSRepPart,
+                                -- as appropriate
+}
+
+EncASRepPart    ::= [APPLICATION 25] EncKDCRepPart
+
+EncTGSRepPart   ::= [APPLICATION 26] EncKDCRepPart
+
+EncKDCRepPart   ::= SEQUENCE {
+        key             [0] EncryptionKey,
+        last-req        [1] LastReq,
+        nonce           [2] UInt32,
+        key-expiration  [3] KerberosTime OPTIONAL,
+        flags           [4] TicketFlags,
+        authtime        [5] KerberosTime,
+        starttime       [6] KerberosTime OPTIONAL,
+        endtime         [7] KerberosTime,
+        renew-till      [8] KerberosTime OPTIONAL,
+        srealm          [9] Realm,
+        sname           [10] PrincipalName,
+        caddr           [11] HostAddresses OPTIONAL
+}
+
+LastReq         ::=     SEQUENCE OF SEQUENCE {
+        lr-type         [0] Int32,
+        lr-value        [1] KerberosTime
+}
+
+AP-REQ          ::= [APPLICATION 14] SEQUENCE {
+        pvno            [0] INTEGER (5),
+        msg-type        [1] INTEGER (14),
+        ap-options      [2] APOptions,
+        ticket          [3] Ticket,
+        authenticator   [4] EncryptedData -- Authenticator
+}
+
+APOptions       ::= KerberosFlags
+        -- reserved(0),
+        -- use-session-key(1),
+
+
+
+Neuman, et al.              Standards Track                   [Page 127]
+
+
+RFC 4120                      Kerberos V5                      July 2005
+
+
+        -- mutual-required(2)
+
+-- Unencrypted authenticator
+Authenticator   ::= [APPLICATION 2] SEQUENCE  {
+        authenticator-vno       [0] INTEGER (5),
+        crealm                  [1] Realm,
+        cname                   [2] PrincipalName,
+        cksum                   [3] Checksum OPTIONAL,
+        cusec                   [4] Microseconds,
+        ctime                   [5] KerberosTime,
+        subkey                  [6] EncryptionKey OPTIONAL,
+        seq-number              [7] UInt32 OPTIONAL,
+        authorization-data      [8] AuthorizationData OPTIONAL
+}
+
+AP-REP          ::= [APPLICATION 15] SEQUENCE {
+        pvno            [0] INTEGER (5),
+        msg-type        [1] INTEGER (15),
+        enc-part        [2] EncryptedData -- EncAPRepPart
+}
+
+EncAPRepPart    ::= [APPLICATION 27] SEQUENCE {
+        ctime           [0] KerberosTime,
+        cusec           [1] Microseconds,
+        subkey          [2] EncryptionKey OPTIONAL,
+        seq-number      [3] UInt32 OPTIONAL
+}
+
+KRB-SAFE        ::= [APPLICATION 20] SEQUENCE {
+        pvno            [0] INTEGER (5),
+        msg-type        [1] INTEGER (20),
+        safe-body       [2] KRB-SAFE-BODY,
+        cksum           [3] Checksum
+}
+
+KRB-SAFE-BODY   ::= SEQUENCE {
+        user-data       [0] OCTET STRING,
+        timestamp       [1] KerberosTime OPTIONAL,
+        usec            [2] Microseconds OPTIONAL,
+        seq-number      [3] UInt32 OPTIONAL,
+        s-address       [4] HostAddress,
+        r-address       [5] HostAddress OPTIONAL
+}
+
+KRB-PRIV        ::= [APPLICATION 21] SEQUENCE {
+        pvno            [0] INTEGER (5),
+        msg-type        [1] INTEGER (21),
+                        -- NOTE: there is no [2] tag
+
+
+
+Neuman, et al.              Standards Track                   [Page 128]
+
+
+RFC 4120                      Kerberos V5                      July 2005
+
+
+        enc-part        [3] EncryptedData -- EncKrbPrivPart
+}
+
+EncKrbPrivPart  ::= [APPLICATION 28] SEQUENCE {
+        user-data       [0] OCTET STRING,
+        timestamp       [1] KerberosTime OPTIONAL,
+        usec            [2] Microseconds OPTIONAL,
+        seq-number      [3] UInt32 OPTIONAL,
+        s-address       [4] HostAddress -- sender's addr --,
+        r-address       [5] HostAddress OPTIONAL -- recip's addr
+}
+
+KRB-CRED        ::= [APPLICATION 22] SEQUENCE {
+        pvno            [0] INTEGER (5),
+        msg-type        [1] INTEGER (22),
+        tickets         [2] SEQUENCE OF Ticket,
+        enc-part        [3] EncryptedData -- EncKrbCredPart
+}
+
+EncKrbCredPart  ::= [APPLICATION 29] SEQUENCE {
+        ticket-info     [0] SEQUENCE OF KrbCredInfo,
+        nonce           [1] UInt32 OPTIONAL,
+        timestamp       [2] KerberosTime OPTIONAL,
+        usec            [3] Microseconds OPTIONAL,
+        s-address       [4] HostAddress OPTIONAL,
+        r-address       [5] HostAddress OPTIONAL
+}
+
+KrbCredInfo     ::= SEQUENCE {
+        key             [0] EncryptionKey,
+        prealm          [1] Realm OPTIONAL,
+        pname           [2] PrincipalName OPTIONAL,
+        flags           [3] TicketFlags OPTIONAL,
+        authtime        [4] KerberosTime OPTIONAL,
+        starttime       [5] KerberosTime OPTIONAL,
+        endtime         [6] KerberosTime OPTIONAL,
+        renew-till      [7] KerberosTime OPTIONAL,
+        srealm          [8] Realm OPTIONAL,
+        sname           [9] PrincipalName OPTIONAL,
+        caddr           [10] HostAddresses OPTIONAL
+}
+
+KRB-ERROR       ::= [APPLICATION 30] SEQUENCE {
+        pvno            [0] INTEGER (5),
+        msg-type        [1] INTEGER (30),
+        ctime           [2] KerberosTime OPTIONAL,
+        cusec           [3] Microseconds OPTIONAL,
+        stime           [4] KerberosTime,
+
+
+
+Neuman, et al.              Standards Track                   [Page 129]
+
+
+RFC 4120                      Kerberos V5                      July 2005
+
+
+        susec           [5] Microseconds,
+        error-code      [6] Int32,
+        crealm          [7] Realm OPTIONAL,
+        cname           [8] PrincipalName OPTIONAL,
+        realm           [9] Realm -- service realm --,
+        sname           [10] PrincipalName -- service name --,
+        e-text          [11] KerberosString OPTIONAL,
+        e-data          [12] OCTET STRING OPTIONAL
+}
+
+METHOD-DATA     ::= SEQUENCE OF PA-DATA
+
+TYPED-DATA      ::= SEQUENCE SIZE (1..MAX) OF SEQUENCE {
+        data-type       [0] Int32,
+        data-value      [1] OCTET STRING OPTIONAL
+}
+
+-- preauth stuff follows
+
+PA-ENC-TIMESTAMP        ::= EncryptedData -- PA-ENC-TS-ENC
+
+PA-ENC-TS-ENC           ::= SEQUENCE {
+        patimestamp     [0] KerberosTime -- client's time --,
+        pausec          [1] Microseconds OPTIONAL
+}
+
+ETYPE-INFO-ENTRY        ::= SEQUENCE {
+        etype           [0] Int32,
+        salt            [1] OCTET STRING OPTIONAL
+}
+
+ETYPE-INFO              ::= SEQUENCE OF ETYPE-INFO-ENTRY
+
+ETYPE-INFO2-ENTRY       ::= SEQUENCE {
+        etype           [0] Int32,
+        salt            [1] KerberosString OPTIONAL,
+        s2kparams       [2] OCTET STRING OPTIONAL
+}
+
+ETYPE-INFO2             ::= SEQUENCE SIZE (1..MAX) OF ETYPE-INFO2-ENTRY
+
+AD-IF-RELEVANT          ::= AuthorizationData
+
+AD-KDCIssued            ::= SEQUENCE {
+        ad-checksum     [0] Checksum,
+        i-realm         [1] Realm OPTIONAL,
+        i-sname         [2] PrincipalName OPTIONAL,
+        elements        [3] AuthorizationData
+
+
+
+Neuman, et al.              Standards Track                   [Page 130]
+
+
+RFC 4120                      Kerberos V5                      July 2005
+
+
+}
+
+AD-AND-OR               ::= SEQUENCE {
+        condition-count [0] Int32,
+        elements        [1] AuthorizationData
+}
+
+AD-MANDATORY-FOR-KDC    ::= AuthorizationData
+
+END
+
+B.  Changes since RFC 1510
+
+   This document replaces RFC 1510 and clarifies specification of items
+   that were not completely specified.  Where changes to recommended
+   implementation choices were made, or where new options were added,
+   those changes are described within the document and listed in this
+   section.  More significantly, "Specification 2" in Section 8 changes
+   the required encryption and checksum methods to bring them in line
+   with the best current practices and to deprecate methods that are no
+   longer considered sufficiently strong.
+
+   Discussion was added to Section 1 regarding the ability to rely on
+   the KDC to check the transited field, and on the inclusion of a flag
+   in a ticket indicating that this check has occurred.  This is a new
+   capability not present in RFC 1510.  Pre-existing implementations may
+   ignore or not set this flag without negative security implications.
+
+   The definition of the secret key says that in the case of a user the
+   key may be derived from a password.  In RFC 1510, it said that the
+   key was derived from the password.  This change was made to
+   accommodate situations where the user key might be stored on a
+   smart-card, or otherwise obtained independently of a password.
+
+   The introduction mentions the use of public key cryptography for
+   initial authentication in Kerberos by reference.  RFC 1510 did not
+   include such a reference.
+
+   Section 1.3 was added to explain that while Kerberos provides
+   authentication of a named principal, it is still the responsibility
+   of the application to ensure that the authenticated name is the
+   entity with which the application wishes to communicate.
+
+   Discussion of extensibility has been added to the introduction.
+
+   Discussion of how extensibility affects ticket flags and KDC options
+   was added to the introduction of Section 2.  No changes were made to
+   existing options and flags specified in RFC 1510, though some of the
+
+
+
+Neuman, et al.              Standards Track                   [Page 131]
+
+
+RFC 4120                      Kerberos V5                      July 2005
+
+
+   sections in the specification were renumbered, and text was revised
+   to make the description and intent of existing options clearer,
+   especially with respect to the ENC-TKT-IN-SKEY option (now section
+   2.9.2) which is used for user-to-user authentication.  The new option
+   and ticket flag transited policy checking (Section 2.7) was added.
+
+   A warning regarding generation of session keys for application use
+   was added to Section 3, urging the inclusion of key entropy from the
+   KDC generated session key in the ticket.  An example regarding use of
+   the sub-session key was added to Section 3.2.6.  Descriptions of the
+   pa-etype-info, pa-etype-info2, and pa-pw-salt pre-authentication data
+   items were added.  The recommendation for use of pre-authentication
+   was changed from "MAY" to "SHOULD" and a note was added regarding
+   known plaintext attacks.
+
+   In RFC 1510, Section 4 described the database in the KDC.  This
+   discussion was not necessary for interoperability and unnecessarily
+   constrained implementation.  The old Section 4 was removed.
+
+   The current Section 4 was formerly Section 6 on encryption and
+   checksum specifications.  The major part of this section was brought
+   up to date to support new encryption methods, and moved to a separate
+   document.  Those few remaining aspects of the encryption and checksum
+   specification specific to Kerberos are now specified in Section 4.
+
+   Significant changes were made to the layout of Section 5 to clarify
+   the correct behavior for optional fields.  Many of these changes were
+   made necessary because of improper ASN.1 description in the original
+   Kerberos specification which left the correct behavior
+   underspecified.  Additionally, the wording in this section was
+   tightened wherever possible to ensure that implementations conforming
+   to this specification will be extensible with the addition of new
+   fields in future specifications.
+
+   Text was added describing time_t=0 issues in the ASN.1.  Text was
+   also added, clarifying issues with implementations treating omitted
+   optional integers as zero.  Text was added clarifying behavior for
+   optional SEQUENCE or SEQUENCE OF that may be empty.  Discussion was
+   added regarding sequence numbers and behavior of some
+   implementations, including "zero" behavior and negative numbers.  A
+   compatibility note was added regarding the unconditional sending of
+   EncTGSRepPart regardless of the enclosing reply type.  Minor changes
+   were made to the description of the HostAddresses type.  Integer
+   types were constrained.  KerberosString was defined as a
+   (significantly) constrained GeneralString.  KerberosFlags was defined
+   to reflect existing implementation behavior that departs from the
+
+
+
+
+
+Neuman, et al.              Standards Track                   [Page 132]
+
+
+RFC 4120                      Kerberos V5                      July 2005
+
+
+   definition in RFC 1510.  The transited-policy-checked(12) and the
+   ok-as-delegate(13) ticket flags were added.  The disable-transited-
+   check(26) KDC option was added.
+
+   Descriptions of commonly implemented PA-DATA were added to Section 5.
+   The description of KRB-SAFE has been updated to note the existing
+   implementation behavior of double-encoding.
+
+   There were two definitions of METHOD-DATA in RFC 1510.  The second
+   one, intended for use with KRB_AP_ERR_METHOD was removed leaving the
+   SEQUENCE OF PA-DATA definition.
+
+   Section 7, naming constraints, from RFC 1510 was moved to Section 6.
+
+   Words were added describing the convention that domain-based realm
+   names for newly-created realms should be specified as uppercase.
+   This recommendation does not make lowercase realm names illegal.
+   Words were added highlighting that the slash-separated components in
+   the X.500 style of realm names is consistent with existing RFC 1510
+   based implementations, but that it conflicts with the general
+   recommendation of X.500 name representation specified in RFC 2253.
+
+   Section 8, network transport, constants and defined values, from RFC
+   1510 was moved to Section 7.  Since RFC 1510, the definition of the
+   TCP transport for Kerberos messages was added, and the encryption and
+   checksum number assignments have been moved into a separate document.
+
+   "Specification 2" in Section 8 of the current document changes the
+   required encryption and checksum methods to bring them in line with
+   the best current practices and to deprecate methods that are no
+   longer considered sufficiently strong.
+
+   Two new sections, on IANA considerations and security considerations
+   were added.
+
+   The pseudo-code has been removed from the appendix.  The pseudo-code
+   was sometimes misinterpreted to limit implementation choices and in
+   RFC 1510, it was not always consistent with the words in the
+   specification.  Effort was made to clear up any ambiguities in the
+   specification, rather than to rely on the pseudo-code.
+
+   An appendix was added containing the complete ASN.1 module drawn from
+   the discussion in Section 5 of the current document.
+
+END NOTES
+
+   (*TM) Project Athena, Athena, and Kerberos are trademarks of the
+   Massachusetts Institute of Technology (MIT).
+
+
+
+Neuman, et al.              Standards Track                   [Page 133]
+
+
+RFC 4120                      Kerberos V5                      July 2005
+
+
+Normative References
+
+   [RFC3961]          Raeburn, K., "Encryption and Checksum
+                      Specifications for Kerberos 5", RFC 3961, February
+                      2005.
+
+   [RFC3962]          Raeburn, K., "Advanced Encryption Standard (AES)
+                      Encryption for Kerberos 5", RFC 3962, February
+                      2005.
+
+   [ISO-646/ECMA-6]   International Organization for Standardization,
+                      "7-bit Coded Character Set for Information
+                      Interchange", ISO/IEC 646:1991.
+
+   [ISO-2022/ECMA-35] International Organization for Standardization,
+                      "Character code structure and extension
+                      techniques", ISO/IEC 2022:1994.
+
+   [RFC1035]          Mockapetris, P., "Domain names - implementation
+                      and specification", STD 13, RFC 1035, November
+                      1987.
+
+   [RFC2119]          Bradner, S., "Key words for use in RFCs to
+                      Indicate Requirement Levels", BCP 14, RFC 2119,
+                      March 1997.
+
+   [RFC2434]          Narten, T. and H. Alvestrand, "Guidelines for
+                      Writing an IANA Considerations Section in RFCs",
+                      BCP 26, RFC 2434, October 1998.
+
+   [RFC2782]          Gulbrandsen, A., Vixie, P., and L. Esibov, "A DNS
+                      RR for specifying the location of services (DNS
+                      SRV)", RFC 2782, February 2000.
+
+   [RFC2253]          Wahl, M., Kille, S., and T. Howes, "Lightweight
+                      Directory Access Protocol (v3): UTF-8 String
+                      Representation of Distinguished Names", RFC 2253,
+                      December 1997.
+
+   [RFC3513]          Hinden, R. and S. Deering, "Internet Protocol
+                      Version 6 (IPv6) Addressing Architecture", RFC
+                      3513, April 2003.
+
+   [X680]             Abstract Syntax Notation One (ASN.1):
+                      Specification of Basic Notation, ITU-T
+                      Recommendation X.680 (1997) | ISO/IEC
+                      International Standard 8824-1:1998.
+
+
+
+
+Neuman, et al.              Standards Track                   [Page 134]
+
+
+RFC 4120                      Kerberos V5                      July 2005
+
+
+   [X690]             ASN.1 encoding rules: Specification of Basic
+                      Encoding Rules (BER), Canonical Encoding Rules
+                      (CER) and Distinguished Encoding Rules (DER),
+                      ITU-T Recommendation X.690 (1997)| ISO/IEC
+                      International Standard 8825-1:1998.
+
+Informative References
+
+   [ISO-8859]         International Organization for Standardization,
+                      "8-bit Single-byte Coded Graphic Character Sets --
+                      Latin Alphabet", ISO/IEC 8859.
+
+   [RFC1964]          Linn, J., "The Kerberos Version 5 GSS-API
+                      Mechanism", RFC 1964, June 1996.
+
+   [DGT96]            Don Davis, Daniel Geer, and Theodore Ts'o,
+                      "Kerberos With Clocks Adrift: History, Protocols,
+                      and Implementation", USENIX Computing Systems 9:1,
+                      January 1996.
+
+   [DS81]             Dorothy E. Denning and Giovanni Maria Sacco,
+                      "Time-stamps in Key Distribution Protocols,"
+                      Communications of the ACM, Vol. 24 (8), p. 533-
+                      536, August 1981.
+
+   [KNT94]            John T. Kohl, B. Clifford Neuman, and Theodore Y.
+                      Ts'o, "The Evolution of the Kerberos
+                      Authentication System". In Distributed Open
+                      Systems, pages 78-94. IEEE Computer Society Press,
+                      1994.
+
+   [MNSS87]           S. P. Miller, B. C. Neuman, J. I. Schiller, and J.
+                      H. Saltzer, Section E.2.1: Kerberos Authentication
+                      and Authorization System, M.I.T. Project Athena,
+                      Cambridge, Massachusetts, December 21, 1987.
+
+   [NS78]             Roger M. Needham and Michael D. Schroeder, "Using
+                      Encryption for Authentication in Large Networks of
+                      Computers," Communications of the ACM, Vol. 21
+                      (12), pp. 993-999, December 1978.
+
+   [Neu93]            B. Clifford Neuman, "Proxy-Based Authorization and
+                      Accounting for Distributed Systems," in
+                      Proceedings of the 13th International Conference
+                      on Distributed Computing Systems, Pittsburgh, PA,
+                      May 1993.
+
+
+
+
+
+Neuman, et al.              Standards Track                   [Page 135]
+
+
+RFC 4120                      Kerberos V5                      July 2005
+
+
+   [NT94]             B. Clifford Neuman and Theodore Y. Ts'o, "An
+                      Authentication Service for Computer Networks,"
+                      IEEE Communications Magazine, Vol. 32 (9), p. 33-
+                      38, September 1994.
+
+   [Pat92]            J. Pato, Using Pre-Authentication to Avoid
+                      Password Guessing Attacks, Open Software
+                      Foundation DCE Request for Comments 26 (December
+                      1992.
+
+   [RFC1510]          Kohl, J. and C. Neuman, "The Kerberos Network
+                      Authentication Service (V5)", RFC 1510, September
+                      1993.
+
+   [RFC4086]          Eastlake, D., 3rd, Schiller, J., and S. Crocker,
+                      "Randomness Requirements for Security", BCP 106,
+                      RFC 4086, June 2005.
+
+   [SNS88]            J. G. Steiner, B. C. Neuman, and J. I. Schiller,
+                      "Kerberos: An Authentication Service for Open
+                      Network Systems," p. 191-202, Usenix Conference
+                      Proceedings, Dallas, Texas, February 1988.
+
+   [RFC4121]          Zhu, L., Jaganathan, K., and S. Hartman, "The
+                      Kerberos Version 5 Generic Security Service
+                      Application Program Interface (GSS-API) Mechanism:
+                      Version 2", RFC 4121, July 2005.
+
+
+
+

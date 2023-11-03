@@ -2,6 +2,11 @@
 
 # Add support for etype 17, 18
 # Add references to some formats definition
+# the 0x76 is KRB-CRED and 0x6d is TGS-REP
+# [ASN1 Quick Reference](https://www.oss.com/asn1/resources/asn1-made-simple/asn1-quick-reference/basic-encoding-rules.html)
+# [RFC4120, The Kerberos Network Authentication Service (V5), Kerberos Application Tag Numbers](https://www.rfc-editor.org/rfc/rfc4120#page-96)
+# [RFC4120, The Kerberos Network Authentication Service (V5), ASN.1 Module, TGS-REP](https://www.rfc-editor.org/rfc/rfc4120#page-126)
+# [KERBEROS V5 ASN.1 Codec](https://cwiki.apache.org/confluence/display/DIRxASN1/Kerberos)
 
 # Dependency: pyasn1
 # https://github.com/etingof/pyasn1/blob/master/pyasn1/codec/ber/decoder.py
@@ -26,14 +31,32 @@ if __name__ == '__main__':
             data = fd.read()
             print(decoder.decode(data)[0]) # The full decoded ASN.1 sequence, contains all info
             print('-----')
-            # print(decoder.decode(data)[0][2][3])
             print('-----')
-            print(decoder.decode(data)[0][2][0][1]); # tgsRealm, "EXAMPLE.LOCAL"
-            print(decoder.decode(data)[0][2][0][2][1][0]) # "MSSQLSvc"
-            print(decoder.decode(data)[0][2][0][2][1][1]) # "sql01.medin.local:1433"
 
-            # .kirbi start with b'\x76'
+            # .kirbi start with b'\x76', which is the "Tag" in "TLV" of ASN.1
+            # 0x76: "KRB-CRED":
+            # 0b01_1_10110: Class:application_Form:constructed_Tag:22; KRB-CRED ::= [APPLICATION 22] SEQUENCE {...}
+            #
+            # KRB-CRED        ::= [APPLICATION 22] SEQUENCE {
+            #         pvno            [0] INTEGER (5),
+            #         msg-type        [1] INTEGER (22),
+            #         tickets         [2] SEQUENCE OF Ticket,
+            #         enc-part        [3] EncryptedData -- EncKrbCredPart
+            # }
+            # https://www.rfc-editor.org/rfc/rfc4120#page-92
+            # Ticket          ::= [APPLICATION 1] SEQUENCE {
+            #         tkt-vno         [0] INTEGER (5),
+            #         realm           [1] Realm,
+            #         sname           [2] PrincipalName,
+            #         enc-part        [3] EncryptedData -- EncTicketPart
+            # }
+            # https://www.rfc-editor.org/rfc/rfc4120#page-124
             if bytes([data[0]]) == b'\x76':  # process .kirbi
+                # 0.2.0 is the "Ticket"
+                # 0.2.0.2 is the "Ticket"."PrincipalName"
+                print(decoder.decode(data)[0][2][0][1]); # "Realm", "EXAMPLE.LOCAL"
+                print(decoder.decode(data)[0][2][0][2][1][0]) # "PrincipalName".name-string[0], "MSSQLSvc"
+                # print(decoder.decode(data)[0][2][0][2][1][1]) # "PrincipalName".name-string[1], "sql01.medin.local:1433"
                 # rem dump
                 bticket = data
                 # etype: encryption type
@@ -42,7 +65,7 @@ if __name__ == '__main__':
                 if etype not in ["23", "18", "17"]:
                     sys.stderr.write("Unsupported etype %s seen! Please report this to us.\n" % etype);
                     exit(1);
-                et = str(decoder.decode(bticket)[0][2][0][3][2])
+                et = str(decoder.decode(bticket)[0][2][0][3][2]) # encrypted part
 
                 # GetUserSPNs.py can also decode etype 17 && 18, and has the print format
                 # [GetUserSPNs.py](https://github.com/SecureAuthCorp/impacket/blob/master/examples/GetUserSPNs.py#L194)
@@ -59,14 +82,39 @@ if __name__ == '__main__':
                 elif etype == "23": # etype 23 (rc4-hmac, deprecated); 13100 Kerberos 5, TGS-REP; krb5tgs$23
                     print("$krb5tgs$%s$" % etype + bytes(et[:16].encode('latin-1')).hex() + "$" + bytes(et[16:].encode('latin-1')).hex() + "\n")
 
-            elif data[:2] == b'6d': # no idea what 0x6d means; can be wireshark; check the decoded bticket to figure out
-                for ticket in data.strip().split(b'\n'):
-                    bticket = bytes.fromhex(ticket)
-                    print(decoder.decode(bticket)[0])
-                    # etype = str(decoder.decode(ticket.decode('hex'))[0][4][3][0])
-                    etype = str(decoder.decode(bticket)[0][4][3][0])
-                    if etype != "23":
-                        sys.stderr.write("Unsupported etype %s seen! Please report this to us.\n" % etype)
-                    # et = str(decoder.decode(ticket.decode('hex'))[0][4][3][2])
-                    et = str(decoder.decode(bticket)[0][4][3][2])
-                    print("$krb5tgs$%s$" % etype + bytes(et[:16].encode('latin-1')).hex() + "$" + bytes(et[16:].encode('latin-1')).hex() + "\n")
+            # 0x6d: "TGS-REP" or "KDC-REP"
+            # 0b01_1_01101: Class:application_Form:constructed_Tag:13; TGS-REP ::= [APPLICATION 13] KDC-REP; KDC-REP ::= SEQUENCE {...}
+            #
+            # KDC-REP         ::= SEQUENCE {
+            #         pvno            [0] INTEGER (5),
+            #         msg-type        [1] INTEGER (11 -- AS -- | 13 -- TGS --),
+            #         padata          [2] SEQUENCE OF PA-DATA OPTIONAL
+            #                                 -- NOTE: not empty --,
+            #         crealm          [3] Realm,
+            #         cname           [4] PrincipalName,
+            #         ticket          [5] Ticket,
+            #         enc-part        [6] EncryptedData
+            #                                 -- EncASRepPart or EncTGSRepPart,
+            #                                 -- as appropriate
+            # }
+            # https://www.rfc-editor.org/rfc/rfc4120#page-126
+            # https://cwiki.apache.org/confluence/display/DIRxASN1/Kerberos
+            # https://github.com/GhostPack/Rubeus/blob/master/Rubeus/lib/krb_structures/TGS_REP.cs
+            #! Unfortunately this branch does not work properly because of 2 bugs in the "pyasn1.codec.ber" package and the kerberos implementation
+            #! Since 1. padata is OPTIONAL (it may be empty even though the spec says it should not)
+            #! and 2. the pyasn1 does not properly handle tag value (in this case 0xa0, 0xa1, 0xa3, 0xa4, 0xa5, where 0xa2 is absent)
+            #! the 0.4 cname becomes 0.3 and 0.5 becomes 0.4 subsequently
+            #! elif bytes([data[0]]) == b'\x6d':
+            #!     # 0.5 is the "Ticket"
+            #!     # 0.4 is the "PrincipalName"
+            #!     print("realm")
+            #!     print(decoder.decode(data)[0][3]); # "Realm"
+            #!     print(decoder.decode(data)[0][4][1][0]) # "PrincipalName".name-string[0]
+            #!     for ticket in data.strip().split(b'\n'):
+            #!         bticket = bytes.fromhex(ticket)
+            #!         print(decoder.decode(bticket)[0])
+            #!         etype = str(decoder.decode(bticket)[0][5][3][0]) # "Ticket"."enc-part".etype
+            #!         if etype != "23":
+            #!             sys.stderr.write("Unsupported etype %s seen! Please report this to us.\n" % etype)
+            #!         et = str(decoder.decode(bticket)[0][4][3][2])
+            #!         print("$krb5tgs$%s$" % etype + bytes(et[:16].encode('latin-1')).hex() + "$" + bytes(et[16:].encode('latin-1')).hex() + "\n")
