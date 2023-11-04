@@ -37,20 +37,20 @@ if __name__ == '__main__':
             # 0x76: "KRB-CRED":
             # 0b01_1_10110: Class:application_Form:constructed_Tag:22; KRB-CRED ::= [APPLICATION 22] SEQUENCE {...}
             #
+            # https://www.rfc-editor.org/rfc/rfc4120#page-92
             # KRB-CRED        ::= [APPLICATION 22] SEQUENCE {
             #         pvno            [0] INTEGER (5),
             #         msg-type        [1] INTEGER (22),
             #         tickets         [2] SEQUENCE OF Ticket,
             #         enc-part        [3] EncryptedData -- EncKrbCredPart
             # }
-            # https://www.rfc-editor.org/rfc/rfc4120#page-92
+            # https://www.rfc-editor.org/rfc/rfc4120#page-124
             # Ticket          ::= [APPLICATION 1] SEQUENCE {
             #         tkt-vno         [0] INTEGER (5),
             #         realm           [1] Realm,
             #         sname           [2] PrincipalName,
             #         enc-part        [3] EncryptedData -- EncTicketPart
             # }
-            # https://www.rfc-editor.org/rfc/rfc4120#page-124
             if bytes([data[0]]) == b'\x76':  # process .kirbi
                 # 0.2.0 is the "Ticket"
                 # 0.2.0.2 is the "Ticket"."PrincipalName"
@@ -101,9 +101,10 @@ if __name__ == '__main__':
             # https://cwiki.apache.org/confluence/display/DIRxASN1/Kerberos
             # https://github.com/GhostPack/Rubeus/blob/master/Rubeus/lib/krb_structures/TGS_REP.cs
             #! Unfortunately this branch does not work properly because of 2 bugs in the "pyasn1.codec.ber" package and the kerberos implementation
-            #! Since 1. padata is OPTIONAL (it may be empty even though the spec says it should not)
-            #! and 2. the pyasn1 does not properly handle tag value (in this case 0xa0, 0xa1, 0xa3, 0xa4, 0xa5, where 0xa2 is absent)
-            #! the 0.4 cname becomes 0.3 and 0.5 becomes 0.4 subsequently
+            #! - Since 1. padata is OPTIONAL (it may be empty even though the spec says it should not)
+            #! - And 2. the pyasn1 does not properly handle tag value (in this case 0xa0, 0xa1, 0xa3, 0xa4, 0xa5, where 0xa2 is absent),
+            #!   i.e. the 0.4 should always be `cname`, however, when 0xa2 is absent, pyasn1 treat cname as 0.3 (despite the tag value 0xa4, the 4th)
+            #!
             #! elif bytes([data[0]]) == b'\x6d':
             #!     # 0.5 is the "Ticket"
             #!     # 0.4 is the "PrincipalName"
